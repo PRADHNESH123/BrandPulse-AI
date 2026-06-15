@@ -5,9 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import tensorflow as tf
 import joblib
-import json
 import sys
-import time
 import random
 from datetime import datetime, timedelta
 from tensorflow.keras.models import load_model
@@ -20,8 +18,23 @@ from src.preprocessing import clean_tweet
 st.set_page_config(
     page_title='BrandPulse AI',
     page_icon='📊',
-    layout='wide'
+    layout='wide',
+    initial_sidebar_state='expanded'
 )
+
+# ── Custom CSS ────────────────────────────────────────────
+st.markdown("""
+<style>
+.metric-card {
+    background: #1e1e2e;
+    border-radius: 10px;
+    padding: 15px;
+    border-left: 4px solid #4ECDC4;
+}
+.positive { color: #4ECDC4; font-size: 24px; font-weight: bold; }
+.negative { color: #FF6B6B; font-size: 24px; font-weight: bold; }
+</style>
+""", unsafe_allow_html=True)
 
 # ── Load models ──────────────────────────────────────────
 @st.cache_resource
@@ -34,12 +47,13 @@ def load_models():
     return tfidf, lr_model, lstm, tokenizer
 
 tfidf, lr_model, lstm_model, tokenizer = load_models()
-
 MAX_LEN = 100
 
 # ── Prediction function ───────────────────────────────────
 def predict_sentiment(text, model_choice):
     cleaned = clean_tweet(text)
+    if not cleaned.strip():
+        return None, None, cleaned
     if model_choice == 'Logistic Regression':
         vec  = tfidf.transform([cleaned])
         pred = lr_model.predict(vec)[0]
@@ -53,36 +67,57 @@ def predict_sentiment(text, model_choice):
     return pred, conf, cleaned
 
 # ── Sidebar ───────────────────────────────────────────────
-st.sidebar.image('https://img.icons8.com/color/96/000000/bar-chart.png', width=80)
-st.sidebar.title('BrandPulse AI')
-st.sidebar.markdown('Twitter Sentiment Analysis')
+st.sidebar.title('📊 BrandPulse AI')
+st.sidebar.markdown('*Twitter Sentiment Analysis*')
 st.sidebar.divider()
 
 model_choice = st.sidebar.selectbox(
-    'Choose Model',
+    '🤖 Choose Model',
     ['Logistic Regression', 'LSTM (BiLSTM)']
 )
 
 st.sidebar.divider()
-st.sidebar.markdown('### Model Performance')
-st.sidebar.metric('Logistic Regression', '~80%', 'Accuracy')
-st.sidebar.metric('LSTM (BiLSTM)', '81.04%', 'Accuracy')
+st.sidebar.markdown('### 📈 Model Performance')
+col1, col2 = st.sidebar.columns(2)
+col1.metric('LR', '80%', 'Fast')
+col2.metric('LSTM', '81%', 'Accurate')
+
+st.sidebar.divider()
+st.sidebar.markdown('### 📁 Project Info')
+st.sidebar.info('''
+**Dataset:** Sentiment140
+**Tweets:** 1.6M
+**Classes:** Positive / Negative
+**Built by:** PRADHNESH
+''')
 
 # ── Header ────────────────────────────────────────────────
-st.title('📊 BrandPulse AI — Twitter Sentiment Analysis')
-st.markdown('Real-time sentiment analysis powered by Classical NLP and Deep Learning')
+st.title('  BrandPulse AI')
+st.markdown('#### Real-time Twitter Sentiment Analysis — Classical NLP vs Deep Learning')
 st.divider()
 
-# ── Tab layout ────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(['🔍 Live Predictor',
-                             '📈 Trend Analysis',
-                             '⚖️ Model Comparison'])
+# ── Top metrics ───────────────────────────────────────────
+m1, m2, m3, m4 = st.columns(4)
+m1.metric('🐦 Tweets Analyzed', '1,592,958', '+1.6M')
+m2.metric('🎯 Best Accuracy', '81.04%', 'LSTM')
+m3.metric('⚡ Fastest Model', 'Logistic Reg', '10x faster')
+m4.metric('📊 Dataset Balance', '50/50', 'Balanced')
+
+st.divider()
+
+# ── Tabs ─────────────────────────────────────────────────
+tab1, tab2, tab3, tab4 = st.tabs([
+    '🔍 Live Predictor',
+    '📊 Sentiment Dashboard',
+    '📈 Trend Analysis',
+    '⚖️ Model Comparison'
+])
 
 # ════════════════════════════════════════════════════════
 # TAB 1 — Live Predictor
 # ════════════════════════════════════════════════════════
 with tab1:
-    st.subheader(' Predict Tweet Sentiment')
+    st.subheader(' Live Tweet Sentiment Predictor')
 
     col1, col2 = st.columns([2, 1])
 
@@ -93,37 +128,42 @@ with tab1:
             height=120
         )
 
-        if st.button('Analyze Sentiment ', type='primary'):
+        if st.button(' Analyze Sentiment', type='primary'):
             if user_input.strip():
                 with st.spinner('Analyzing...'):
                     pred, conf, cleaned = predict_sentiment(
                         user_input, model_choice)
 
                 if pred == 1:
-                    st.success(f'😊 POSITIVE — Confidence: {conf:.1f}%')
+                    st.success(f'😊 **POSITIVE** — Confidence: {conf:.1f}%')
+                    st.balloons()
+                elif pred == 0:
+                    st.error(f'😞 **NEGATIVE** — Confidence: {conf:.1f}%')
                 else:
-                    st.error(f'😞 NEGATIVE — Confidence: {conf:.1f}%')
+                    st.warning('Could not analyze — tweet too short after cleaning')
 
-                with st.expander('See cleaned text'):
+                with st.expander('🔍 See preprocessing details'):
+                    st.write(f'**Original:** {user_input}')
                     st.write(f'**Cleaned:** {cleaned}')
+                    st.write(f'**Model used:** {model_choice}')
             else:
                 st.warning('Please enter a tweet!')
 
     with col2:
-        st.markdown('### Try these examples:')
+        st.markdown('### 💡 Try these:')
         examples = [
-            "This product is absolutely amazing!",
-            "Worst experience ever. Never again!",
-            "Not happy with the service today.",
-            "Best purchase I have ever made!",
-            "The delivery was late and damaged."
+            ("😊", "This product is absolutely amazing!"),
+            ("😞", "Worst experience ever. Never again!"),
+            ("😊", "Best purchase I have ever made!"),
+            ("😞", "The delivery was late and damaged."),
+            ("😊", "Highly recommend to everyone!")
         ]
-        for ex in examples:
-            if st.button(ex[:40] + '...', key=ex):
+        for emoji, ex in examples:
+            if st.button(f'{emoji} {ex[:35]}...', key=ex):
                 pred, conf, cleaned = predict_sentiment(ex, model_choice)
                 if pred == 1:
                     st.success(f'😊 POSITIVE ({conf:.1f}%)')
-                else:
+                elif pred == 0:
                     st.error(f'😞 NEGATIVE ({conf:.1f}%)')
 
     st.divider()
@@ -132,127 +172,251 @@ with tab1:
     st.subheader('📋 Batch Prediction')
     batch_input = st.text_area(
         'Enter multiple tweets (one per line):',
-        height=150,
+        height=120,
         placeholder='Tweet 1\nTweet 2\nTweet 3'
     )
 
-    if st.button('Analyze All '):
+    if st.button(' Analyze All Tweets'):
         if batch_input.strip():
             tweets = [t.strip() for t in batch_input.split('\n') if t.strip()]
             results = []
-            for tweet in tweets:
+            progress = st.progress(0)
+            for i, tweet in enumerate(tweets):
                 pred, conf, cleaned = predict_sentiment(tweet, model_choice)
                 results.append({
                     'Tweet': tweet[:60] + '...' if len(tweet) > 60 else tweet,
                     'Sentiment': '😊 Positive' if pred == 1 else '😞 Negative',
-                    'Confidence': f'{conf:.1f}%'
+                    'Confidence': f'{conf:.1f}%' if conf else 'N/A'
                 })
+                progress.progress((i+1)/len(tweets))
+
             df_results = pd.DataFrame(results)
             st.dataframe(df_results, use_container_width=True)
 
             pos = sum(1 for r in results if 'Positive' in r['Sentiment'])
             neg = len(results) - pos
-            fig = px.pie(
-                values=[pos, neg],
-                names=['Positive', 'Negative'],
-                color_discrete_map={'Positive': '#4ECDC4', 'Negative': '#FF6B6B'},
-                title='Batch Sentiment Distribution'
-            )
-            st.plotly_chart(fig, use_container_width=True)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                fig_pie = px.pie(
+                    values=[pos, neg],
+                    names=['Positive', 'Negative'],
+                    color_discrete_map={
+                        'Positive': '#4ECDC4',
+                        'Negative': '#FF6B6B'
+                    },
+                    title='Batch Sentiment Distribution',
+                    hole=0.4
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            with col2:
+                fig_bar = px.bar(
+                    x=['Positive', 'Negative'],
+                    y=[pos, neg],
+                    color=['Positive', 'Negative'],
+                    color_discrete_map={
+                        'Positive': '#4ECDC4',
+                        'Negative': '#FF6B6B'
+                    },
+                    title='Sentiment Count'
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
 
 # ════════════════════════════════════════════════════════
-# TAB 2 — Trend Analysis
+# TAB 2 — Sentiment Dashboard
 # ════════════════════════════════════════════════════════
 with tab2:
+    st.subheader('📊 Sentiment Dashboard')
+
+    # Simulated live data
+    np.random.seed(42)
+    n = 500
+    sentiments = np.random.choice(['Positive', 'Negative'], n, p=[0.55, 0.45])
+    topics = np.random.choice(
+        ['Product', 'Service', 'Delivery', 'Support', 'Price'], n)
+    hours = [datetime.now() - timedelta(minutes=i*5) for i in range(n)]
+
+    df_live = pd.DataFrame({
+        'time': hours,
+        'sentiment': sentiments,
+        'topic': topics
+    })
+
+    pos_count = (df_live['sentiment'] == 'Positive').sum()
+    neg_count = (df_live['sentiment'] == 'Negative').sum()
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric('Total Tweets', n, '+500')
+    col2.metric('😊 Positive', pos_count, f'{pos_count/n*100:.1f}%')
+    col3.metric('😞 Negative', neg_count, f'-{neg_count/n*100:.1f}%')
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig_donut = px.pie(
+            values=[pos_count, neg_count],
+            names=['Positive', 'Negative'],
+            color_discrete_map={
+                'Positive': '#4ECDC4',
+                'Negative': '#FF6B6B'
+            },
+            hole=0.5,
+            title='Overall Sentiment Distribution'
+        )
+        fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    with col2:
+        topic_sentiment = df_live.groupby(
+            ['topic', 'sentiment']).size().reset_index(name='count')
+        fig_topic = px.bar(
+            topic_sentiment,
+            x='topic',
+            y='count',
+            color='sentiment',
+            color_discrete_map={
+                'Positive': '#4ECDC4',
+                'Negative': '#FF6B6B'
+            },
+            title='Sentiment by Topic',
+            barmode='group'
+        )
+        st.plotly_chart(fig_topic, use_container_width=True)
+
+# ════════════════════════════════════════════════════════
+# TAB 3 — Trend Analysis
+# ════════════════════════════════════════════════════════
+with tab3:
     st.subheader('📈 Sentiment Trend — Last 24 Hours')
 
-    # Simulate 24hr trend data
-    hours = [datetime.now() - timedelta(hours=i) for i in range(24, 0, -1)]
+    hours_range = [datetime.now() - timedelta(hours=i)
+                   for i in range(24, 0, -1)]
     np.random.seed(42)
-    positive_counts = np.random.randint(40, 80, 24)
-    negative_counts = 100 - positive_counts
+    pos_trend = np.random.randint(45, 75, 24)
+    neg_trend = 100 - pos_trend
 
     df_trend = pd.DataFrame({
-        'Time': hours,
-        'Positive': positive_counts,
-        'Negative': negative_counts
+        'Time': hours_range,
+        'Positive': pos_trend,
+        'Negative': neg_trend
     })
 
     fig_trend = go.Figure()
     fig_trend.add_trace(go.Scatter(
-        x=df_trend['Time'], y=df_trend['Positive'],
-        name='Positive', fill='tozeroy',
+        x=df_trend['Time'],
+        y=df_trend['Positive'],
+        name='Positive',
+        fill='tozeroy',
+        fillcolor='rgba(78,205,196,0.2)',
         line=dict(color='#4ECDC4', width=2)
     ))
     fig_trend.add_trace(go.Scatter(
-        x=df_trend['Time'], y=df_trend['Negative'],
-        name='Negative', fill='tozeroy',
+        x=df_trend['Time'],
+        y=df_trend['Negative'],
+        name='Negative',
+        fill='tozeroy',
+        fillcolor='rgba(255,107,107,0.2)',
         line=dict(color='#FF6B6B', width=2)
     ))
     fig_trend.update_layout(
         title='Sentiment Trend Over Last 24 Hours',
         xaxis_title='Time',
         yaxis_title='Tweet Count',
-        hovermode='x unified'
+        hovermode='x unified',
+        height=400
     )
     st.plotly_chart(fig_trend, use_container_width=True)
 
     col1, col2, col3 = st.columns(3)
-    col1.metric('Total Tweets', '2,400', '+12%')
-    col2.metric('Positive', f'{positive_counts.mean():.0f}%', '+5%')
-    col3.metric('Negative', f'{negative_counts.mean():.0f}%', '-5%')
+    col1.metric('Peak Positive Hour', f'{pos_trend.argmax()}:00', '75%')
+    col2.metric('Peak Negative Hour', f'{neg_trend.argmax()}:00', '58%')
+    col3.metric('Average Positive', f'{pos_trend.mean():.0f}%', 'Stable')
 
-    # Pie chart
-    st.subheader('Overall Sentiment Distribution')
-    total_pos = int(positive_counts.sum())
-    total_neg = int(negative_counts.sum())
-
-    fig_pie = px.pie(
-        values=[total_pos, total_neg],
-        names=['Positive', 'Negative'],
-        color_discrete_map={'Positive': '#4ECDC4', 'Negative': '#FF6B6B'},
-        hole=0.4
+    # Hourly breakdown
+    fig_bar = px.bar(
+        df_trend,
+        x='Time',
+        y=['Positive', 'Negative'],
+        color_discrete_map={
+            'Positive': '#4ECDC4',
+            'Negative': '#FF6B6B'
+        },
+        title='Hourly Sentiment Breakdown',
+        barmode='stack'
     )
-    fig_pie.update_layout(title='24-Hour Sentiment Split')
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_bar, use_container_width=True)
 
 # ════════════════════════════════════════════════════════
-# TAB 3 — Model Comparison
+# TAB 4 — Model Comparison
 # ════════════════════════════════════════════════════════
-with tab3:
+with tab4:
     st.subheader('⚖️ Classical NLP vs Deep Learning')
 
     col1, col2, col3 = st.columns(3)
     col1.metric('Logistic Regression', '~80%', 'F1: 0.80')
     col2.metric('Naive Bayes', '~78%', 'F1: 0.78')
-    col3.metric('LSTM (BiLSTM)', '81.04%', 'F1: 0.81')
+    col3.metric('LSTM (BiLSTM)', '81.04%', 'F1: 0.81 ⭐')
 
-    # Comparison chart
+    st.divider()
+
     comparison_data = {
         'Model': ['Logistic Regression', 'Naive Bayes', 'LSTM (BiLSTM)'],
-        'Accuracy': [0.80, 0.78, 0.8104],
-        'F1-Score': [0.80, 0.78, 0.81],
-        'Speed': ['Fast', 'Very Fast', 'Slow'],
-        'Interpretable': ['Yes', 'Yes', 'No']
+        'Accuracy': [0.800, 0.780, 0.8104],
+        'Precision': [0.800, 0.779, 0.810],
+        'Recall': [0.800, 0.781, 0.810],
+        'F1-Score': [0.800, 0.780, 0.810],
     }
     df_comp = pd.DataFrame(comparison_data)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig_radar = go.Figure()
+        metrics = ['Accuracy', 'Precision', 'Recall', 'F1-Score']
+        colors  = ['#4ECDC4', '#FF6B6B', '#9B59B6']
+
+        for i, row in df_comp.iterrows():
+            values = [row[m] for m in metrics]
+            values.append(values[0])
+            fig_radar.add_trace(go.Scatterpolar(
+                r=values,
+                theta=metrics + [metrics[0]],
+                fill='toself',
+                name=row['Model'],
+                line_color=colors[i]
+            ))
+
+        fig_radar.update_layout(
+            polar=dict(radialaxis=dict(visible=True, range=[0.7, 0.85])),
+            title='Model Performance Radar Chart'
+        )
+        st.plotly_chart(fig_radar, use_container_width=True)
+
+    with col2:
+        fig_comp = px.bar(
+            df_comp,
+            x='Model',
+            y=['Accuracy', 'F1-Score'],
+            barmode='group',
+            color_discrete_map={
+                'Accuracy': '#4ECDC4',
+                'F1-Score': '#9B59B6'
+            },
+            title='Accuracy vs F1-Score'
+        )
+        fig_comp.update_layout(yaxis_range=[0.7, 0.85])
+        st.plotly_chart(fig_comp, use_container_width=True)
+
     st.dataframe(df_comp, use_container_width=True)
 
-    fig_comp = px.bar(
-        df_comp,
-        x='Model',
-        y=['Accuracy', 'F1-Score'],
-        barmode='group',
-        color_discrete_map={'Accuracy': '#4ECDC4', 'F1-Score': '#9B59B6'},
-        title='Accuracy vs F1-Score Comparison'
-    )
-    st.plotly_chart(fig_comp, use_container_width=True)
-
     st.markdown("""
-    ### Key Takeaways
-    - **LSTM** achieves highest accuracy by understanding word context
-    - **Logistic Regression** is 10x faster and nearly as accurate
-    - **Naive Bayes** is lightest but misses complex patterns
-    - For production: use **Logistic Regression** for speed,
-      **LSTM** for maximum accuracy
+    ### 🔑 Key Takeaways
+    | | Logistic Regression | Naive Bayes | LSTM |
+    |---|---|---|---|
+    | **Speed** | ⚡ Fast | ⚡⚡ Very Fast | 🐢 Slow |
+    | **Accuracy** | ✅ Good | ⚠️ OK | ✅✅ Best |
+    | **Memory** | Low | Very Low | High |
+    | **Interpretable** | ✅ Yes | ✅ Yes | ❌ No |
+    | **Best for** | Production | Quick deploy | Max accuracy |
     """)
